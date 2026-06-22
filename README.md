@@ -1,6 +1,6 @@
 # USB Relay Controller
 
-**USB Relay Controller** este o aplicație desktop simplă și practică, construită în Python cu Tkinter, pentru controlul rapid al mai multor module USB Relay. Interfața oferă o vedere clară asupra fiecărei plăci și a fiecărui releu, astfel încât pornirea sau oprirea circuitelor conectate să fie la un click distanță.
+**USB Relay Controller** este o aplicație desktop simplă, construită în Python cu Tkinter, pentru controlul rapid al mai multor module USB Relay. Interfața oferă o vedere clară asupra fiecărei plăci și a fiecărui releu, astfel încât pornirea sau oprirea circuitelor conectate să fie la un click distanță.
 
 ## Ce face aplicația
 
@@ -13,6 +13,25 @@ Pentru operații rapide, aplicația include și două comenzi globale:
 
 - **ALL ON** — pornește toate releele de pe toate plăcile;
 - **ALL OFF** — oprește toate releele de pe toate plăcile.
+
+## Optimizări incluse
+
+- comenzile individuale sunt executate în fundal, astfel încât interfața Tkinter nu se blochează în timpul comunicării cu `usbrelay.exe`;
+- comenzile globale rulează în paralel pentru toate releele configurate;
+- butoanele sunt dezactivate temporar cât timp comanda asociată este în execuție, pentru a preveni apăsările repetate accidentale;
+- starea din interfață este actualizată numai pentru comenzile executate cu succes;
+- erorile returnate de `usbrelay.exe` sunt afișate în consolă pentru depanare mai ușoară.
+
+## Utilitar pentru schimbarea ID-ului
+
+Fișierul `change_usbrelay_id.py` ajută la schimbarea serialului unei plăci USB Relay. Scriptul:
+
+- listează plăcile detectate cu `usbrelay.exe -list`;
+- acceptă ID-uri ASCII alfanumerice de maximum 5 caractere;
+- construiește raportul HID într-o funcție separată, mai ușor de testat și întreținut;
+- rulează doar când fișierul este executat direct, datorită blocului `if __name__ == "__main__"`.
+
+> Recomandare: conectează o singură placă atunci când schimbi ID-ul, apoi deconectează și reconectează placa înainte de verificare.
 
 ## De ce este utilă
 
@@ -27,22 +46,32 @@ Prin folosirea comenzilor în paralel atunci când se schimbă starea tuturor re
 - comenzi globale pentru activarea sau dezactivarea tuturor releelor;
 - afișarea stării curente direct pe butoane;
 - integrare cu executabilul `usbrelay.exe` pentru trimiterea comenzilor către hardware;
-- mesaje de eroare clare atunci când un releu nu poate fi controlat.
+- mesaje de eroare clare atunci când un releu nu poate fi controlat;
+- utilitar separat pentru schimbarea ID-ului plăcilor.
 
 ## Cerințe
 
 - Python 3;
 - Tkinter disponibil în instalarea Python;
+- pachetul Python `hid` pentru `change_usbrelay_id.py`;
 - `usbrelay.exe` accesibil din directorul aplicației sau din `PATH`;
 - module USB Relay configurate cu serialele definite în `relay_gui.py`.
 
-## Rulare
+## Rulare interfață grafică
 
 ```bash
 python relay_gui.py
 ```
 
 După pornire, se deschide fereastra **USB Relay Controller**, unde fiecare placă are propriul grup de controale. Apasă pe butonul unui releu pentru a-i schimba starea sau folosește butoanele globale pentru control simultan.
+
+## Schimbarea ID-ului unei plăci
+
+```bash
+python change_usbrelay_id.py
+```
+
+Urmează instrucțiunile afișate în terminal. Pentru ieșire, introdu `Q`, `QUIT` sau `EXIT`.
 
 ## Personalizare
 
