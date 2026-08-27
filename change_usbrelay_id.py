@@ -1,13 +1,15 @@
 """Utilitar pentru schimbarea serialului (ID-ului) unei placi USB Relay.
 
+Listarea placilor se face prin ``USB_RELAY_DEVICE.dll`` (vezi
+``usb_relay_lib.py``), iar scrierea ID-ului prin pachetul ``hid``, pentru ca
+biblioteca nativa nu expune o functie de setare a serialului.
+
 Modulul poate fi folosit in doua feluri:
 
 * rulat direct, ca utilitar de linie de comanda (``python change_usbrelay_id.py``);
 * importat de interfata grafica ``relay_gui.py``, care refoloseste
-  ``list_relays_output``, ``validate_id`` si ``change_id``.
+  ``validate_id`` si ``change_id``.
 """
-
-import subprocess
 
 try:
     import hid
@@ -17,49 +19,35 @@ except ImportError as exc:  # pragma: no cover - depinde de mediul de rulare
 else:
     HID_IMPORT_ERROR = None
 
+from usb_relay_lib import MAX_SERIAL_LENGTH as MAX_ID_LENGTH
+from usb_relay_lib import RelayController, UsbRelayError, format_devices
+
 VID = 0x16C0
 PID = 0x05DF
 CMD_SET_SERIAL = 0xFA
-USBRELAY_EXE = "usbrelay.exe"
-MAX_ID_LENGTH = 5
 REPORT_LENGTH = 9
-LIST_TIMEOUT_SECONDS = 5
 EXIT_COMMANDS = {"Q", "QUIT", "EXIT"}
 
 
 def list_relays_output():
-    """Return ``(success, text)`` cu rezultatul comenzii ``usbrelay.exe -list``."""
+    """Return ``(success, text)`` cu placile detectate de biblioteca nativa."""
+    controller = RelayController()
     try:
-        result = subprocess.run(
-            [USBRELAY_EXE, "-list"],
-            capture_output=True,
-            text=True,
-            timeout=LIST_TIMEOUT_SECONDS,
-            shell=False,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        return False, f"Nu pot rula {USBRELAY_EXE}: {exc}"
+        devices = controller.scan()
+    except UsbRelayError as exc:
+        return False, str(exc)
+    finally:
+        controller.close()
 
-    output = (result.stdout or "").strip()
-    errors = (result.stderr or "").strip()
-
-    if result.returncode != 0:
-        detail = errors or output or f"cod de iesire {result.returncode}"
-        return False, f"{USBRELAY_EXE} a esuat: {detail}"
-
-    if errors:
-        output = f"{output}\n{errors}".strip()
-
-    return True, output or "Nicio placa detectata."
+    return True, format_devices(devices)
 
 
 def list_relays():
-    """Print relay devices detected by usbrelay.exe."""
-    print("\n--- usbrelay.exe -list ---")
+    """Print relay devices detected by the native library."""
+    print("\n--- placi USB Relay detectate ---")
     _, output = list_relays_output()
     print(output)
-    print("--------------------------\n")
+    print("--------------------------------\n")
 
 
 def validate_id(new_id):
