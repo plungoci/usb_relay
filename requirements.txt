@@ -1,2 +1,5 @@
 PySide6>=6.5
-hid>=1.0.5
+
+# Doar pentru sisteme non-Windows. Pe Windows, schimbarea ID-ului foloseste
+# stiva HID din sistem (vezi hid_backend.py), deci nu are nevoie de hidapi.
+hid>=1.0.5; platform_system != "Windows"

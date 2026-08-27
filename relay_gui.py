@@ -100,11 +100,11 @@ def op_set_boards(controller, serials, state):
     return controller.set_boards(serials, state)
 
 
-def op_write_id(controller, new_id):
-    """Elibereaza placile, apoi scrie noul serial prin ``hid``."""
+def op_write_id(controller, new_id, target_id=None):
+    """Elibereaza placile, apoi scrie noul serial prin stiva HID."""
     controller.release_devices()
-    change_id(new_id)
-    return new_id
+    written_on = change_id(new_id, target_id)
+    return new_id, written_on
 
 
 class _CallSignals(QObject):
@@ -482,7 +482,7 @@ class ChangeIdPage(QWidget):
         layout = QVBoxLayout(self)
 
         warning = QLabel(
-            "Conecteaza O SINGURA placa inainte de a scrie ID-ul. "
+            "Alege placa tinta sau lasa conectata o singura placa. "
             "Dupa scriere, deconecteaza si reconecteaza placa, apoi "
             "reimprospateaza lista pentru verificare."
         )
@@ -506,6 +506,16 @@ class ChangeIdPage(QWidget):
         refresh_row.addStretch(1)
         layout.addLayout(refresh_row)
 
+        target_row = QHBoxLayout()
+        target_row.addWidget(QLabel("Placa tinta:"))
+
+        self.target_selector = QComboBox()
+        self.target_selector.setMinimumWidth(220)
+        self._fill_targets([])
+        target_row.addWidget(self.target_selector)
+        target_row.addStretch(1)
+        layout.addLayout(target_row)
+
         id_row = QHBoxLayout()
         id_row.addWidget(QLabel("ID nou:"))
 
@@ -527,6 +537,20 @@ class ChangeIdPage(QWidget):
 
         layout.addLayout(id_row)
 
+    def _fill_targets(self, devices):
+        """Reincarca lista de placi tinta, pastrand selectia daca se poate."""
+        previous = self.target_selector.currentData()
+        self.target_selector.clear()
+        self.target_selector.addItem("(placa unica conectata)", None)
+
+        for device in devices:
+            self.target_selector.addItem(device.label(), device.serial)
+
+        if previous is not None:
+            index = self.target_selector.findData(previous)
+            if index >= 0:
+                self.target_selector.setCurrentIndex(index)
+
     def _force_uppercase(self, text):
         if text != text.upper():
             self.id_edit.setText(text.upper())
@@ -535,6 +559,7 @@ class ChangeIdPage(QWidget):
         self.refresh_button.setEnabled(not busy)
         self.write_button.setEnabled(not busy)
         self.id_edit.setEnabled(not busy)
+        self.target_selector.setEnabled(not busy)
 
     def refresh_list(self):
         self._set_busy(True)
@@ -549,6 +574,7 @@ class ChangeIdPage(QWidget):
         devices, _ = result
         self._set_busy(False)
         self.output.setPlainText(format_devices(devices))
+        self._fill_targets(devices)
         self.statusMessage.emit(f"Lista actualizata: {len(devices)} placi.")
         self.devicesRefreshed.emit(devices)
 
@@ -561,11 +587,15 @@ class ChangeIdPage(QWidget):
             QMessageBox.warning(self, "ID invalid", str(exc))
             return
 
+        target_id = self.target_selector.currentData()
+        target_text = (
+            f"placa {target_id}" if target_id else "placa conectata"
+        )
+
         confirm = QMessageBox.question(
             self,
             "Confirmare",
-            f"Scriu ID-ul {new_id} pe placa conectata?\n\n"
-            "Asigura-te ca este conectata O SINGURA placa USB Relay.",
+            f"Scriu ID-ul {new_id} pe {target_text}?",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
@@ -577,18 +607,20 @@ class ChangeIdPage(QWidget):
         self.service.submit(
             op_write_id,
             new_id,
+            target_id,
             on_result=self._finish_write,
             on_error=self._fail,
         )
 
-    def _finish_write(self, new_id):
+    def _finish_write(self, result):
+        new_id, written_on = result
         self._set_busy(False)
-        self.statusMessage.emit(f"ID-ul {new_id} a fost trimis catre placa.")
+        self.statusMessage.emit(f"ID-ul {new_id} a fost trimis catre {written_on}.")
         self.boardsChanged.emit()
         QMessageBox.information(
             self,
             "Comanda trimisa",
-            f"ID-ul {new_id} a fost trimis.\n\n"
+            f"ID-ul {new_id} a fost trimis catre {written_on}.\n\n"
             "Scoate si reconecteaza placa USB, apoi apasa "
             "'Reimprospateaza lista' pentru verificare.",
         )

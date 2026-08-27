@@ -1,8 +1,9 @@
 """Utilitar pentru schimbarea serialului (ID-ului) unei placi USB Relay.
 
 Listarea placilor se face prin ``USB_RELAY_DEVICE.dll`` (vezi
-``usb_relay_lib.py``), iar scrierea ID-ului prin pachetul ``hid``, pentru ca
-biblioteca nativa nu expune o functie de setare a serialului.
+``usb_relay_lib.py``), iar scrierea ID-ului prin stiva HID a sistemului (vezi
+``hid_backend.py``), pentru ca biblioteca nativa nu expune o functie de setare
+a serialului.
 
 Modulul poate fi folosit in doua feluri:
 
@@ -11,21 +12,14 @@ Modulul poate fi folosit in doua feluri:
   ``validate_id`` si ``change_id``.
 """
 
-try:
-    import hid
-except ImportError as exc:  # pragma: no cover - depinde de mediul de rulare
-    hid = None
-    HID_IMPORT_ERROR = str(exc)
-else:
-    HID_IMPORT_ERROR = None
-
+import hid_backend
 from usb_relay_lib import MAX_SERIAL_LENGTH as MAX_ID_LENGTH
 from usb_relay_lib import RelayController, UsbRelayError, format_devices
 
-VID = 0x16C0
-PID = 0x05DF
+VID = hid_backend.VID
+PID = hid_backend.PID
 CMD_SET_SERIAL = 0xFA
-REPORT_LENGTH = 9
+REPORT_LENGTH = hid_backend.REPORT_LENGTH
 EXIT_COMMANDS = {"Q", "QUIT", "EXIT"}
 
 
@@ -65,21 +59,13 @@ def build_serial_report(new_id):
     return report[:REPORT_LENGTH]
 
 
-def change_id(new_id):
+def change_id(new_id, target_id=None):
+    """Scrie ID-ul nou pe placa ceruta si return eticheta placii folosite.
+
+    Daca ``target_id`` lipseste, trebuie sa fie conectata o singura placa.
+    """
     report = build_serial_report(new_id)
-
-    if hid is None:
-        raise RuntimeError(
-            "Pachetul Python 'hid' nu este disponibil "
-            f"({HID_IMPORT_ERROR}). Instaleaza-l cu: pip install hid"
-        )
-
-    device = hid.device()
-    try:
-        device.open(VID, PID)
-        device.send_feature_report(report)
-    finally:
-        device.close()
+    return hid_backend.write_feature_report(report, VID, PID, target_id)
 
 
 def prompt_id():
