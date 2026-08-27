@@ -44,12 +44,15 @@ Codurile de retur documentate în header (`0` succes, `1` eroare, `2` index inva
 
 Fila **Schimbă ID placă** oferă aceleași operații ca utilitarul din linia de comandă, dar cu mouse-ul:
 
-- butonul **Reîmprospătează lista** enumeră plăcile și arată pentru fiecare ID-ul, numărul de canale și calea dispozitivului;
+- butonul **Reîmprospătează lista** enumeră plăcile și arată pentru fiecare ID-ul și numărul de canale;
+- lista **Placă țintă** îți lasă să alegi exact placa pe care scrii; dacă rămâne pe „placă unică conectată", scrierea se face doar când e conectată o singură placă, altfel aplicația refuză explicit și îți spune ce plăci a găsit;
 - câmpul **ID nou** acceptă doar caractere alfanumerice ASCII și maximum 5 caractere, iar textul este transformat automat în majuscule;
 - butonul **Scrie ID pe placă** cere o confirmare, apoi scrie noul serial;
 - după scriere, aplicația îți amintește să deconectezi și să reconectezi placa, iar fila de control cere o rescanare.
 
-Scrierea ID-ului se face prin pachetul `hid`, pentru că biblioteca nativă nu expune o funcție de setare a serialului. Înainte de scriere, aplicația eliberează handle-urile deschise de bibliotecă, ca placa să nu rămână ocupată.
+Scrierea ID-ului se face printr-un raport HID de tip *feature*, pentru că biblioteca nativă nu expune o funcție de setare a serialului. Pe **Windows nu este nevoie de nicio dependință în plus**: `hid_backend.py` folosește direct API-ul din sistem (`setupapi.dll` pentru enumerare, `hid.dll` pentru rapoarte). Pe alte sisteme se folosește pachetul Python `hid`, dacă este instalat.
+
+Plăcile își țin ID-ul în primii octeți ai raportului de feature, așa că aplicația poate identifica fiecare placă și scrie pe cea aleasă. Înainte de scriere, handle-urile deschise de biblioteca de relee sunt eliberate, ca placa să nu rămână ocupată.
 
 ## Utilitar în linia de comandă
 
@@ -87,8 +90,9 @@ Pentru că apelurile se fac direct în biblioteca nativă, nu prin pornirea unui
 - Windows, cu `USB_RELAY_DEVICE.dll` din `lib/` (versiunea inclusă este pe **64 de biți**);
 - Python 3 pe **64 de biți**, ca să corespundă arhitecturii DLL-ului;
 - pachetul Python `PySide6` pentru interfața grafică;
-- pachetul Python `hid`, necesar doar pentru schimbarea ID-ului;
 - eventual pachetul VC++ redistributable, cerut de DLL.
+
+Pe Windows nu este nevoie de pachetul `hid` sau de `hidapi.dll`: schimbarea ID-ului folosește stiva HID a sistemului. Pachetul `hid` este necesar doar dacă rulezi pe alt sistem de operare.
 
 ```bash
 pip install -r requirements.txt
@@ -101,6 +105,7 @@ pip install -r requirements.txt
 | `relay_gui.py` | interfața PySide6 și threadul de lucru |
 | `usb_relay_lib.py` | binding `ctypes` peste biblioteca nativă |
 | `change_usbrelay_id.py` | schimbarea ID-ului (interfață + linie de comandă) |
+| `hid_backend.py` | acces HID nativ pe Windows, cu rezervă pe pachetul `hid` |
 | `lib/USB_RELAY_DEVICE.dll` | biblioteca nativă, 64 de biți |
 | `lib/usb_relay_device.h`, `lib/usb_relay_device.lib` | header și import library, pentru integrări C/C++ |
 | `lib/Readme_USBRelayDLL.md` | documentația originală a bibliotecii |
@@ -126,7 +131,9 @@ Urmează instrucțiunile afișate în terminal. Pentru ieșire, introdu `Q`, `QU
 - **„Nu pot încărca biblioteca USB Relay"** — verifică dacă `USB_RELAY_DEVICE.dll` este în `lib/` și dacă arhitectura Python (32/64 de biți) se potrivește cu cea a DLL-ului. Mesajul de eroare afișat de aplicație spune exact unde a căutat.
 - **DLL într-o altă locație** — setează variabila de mediu `USB_RELAY_DLL` către calea bibliotecii; are prioritate față de căutarea automată.
 - **Placa nu apare în listă** — biblioteca nu detectează conectarea la cald, deci apasă **Scanează plăci** după ce ai conectat placa.
-- **Nu pot scrie ID-ul** — instalează pachetul `hid` și asigură-te că este conectată o singură placă.
+- **„Sunt conectate N plăci"** — alege placa din lista **Placă țintă** sau lasă conectată o singură placă.
+- **Nu pot deschide placa pentru scriere** — închide alte programe care folosesc placa și încearcă din nou.
+- **Pe alt sistem decât Windows** — scrierea ID-ului cere pachetul `hid` împreună cu biblioteca nativă `hidapi`; pe Windows nu ai nevoie de niciuna.
 
 ## Personalizare
 

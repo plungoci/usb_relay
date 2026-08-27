@@ -277,8 +277,11 @@ def format_devices(devices):
         lines.append(
             f"{position}. ID: {device.serial:<6} canale: {device.channels}"
         )
-        if device.device_path:
-            lines.append(f"   cale: {device.device_path}")
+        # Unele versiuni ale bibliotecii returneaza "NOTHING" ca substitut
+        # pentru calea dispozitivului; nu are rost afisata.
+        path = device.device_path
+        if path and path.upper() != "NOTHING":
+            lines.append(f"   cale: {path}")
 
     return "\n".join(lines)
 
