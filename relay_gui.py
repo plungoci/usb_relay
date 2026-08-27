@@ -47,7 +47,6 @@ from usb_relay_lib import RelayController, format_devices
 MIN_BOARD_COUNT = 1
 MAX_BOARD_COUNT = 4
 DEFAULT_BOARD_COUNT = MAX_BOARD_COUNT
-SHUTDOWN_TIMEOUT_SECONDS = 5
 
 ON_STYLE = """
 QPushButton {
