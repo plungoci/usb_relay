@@ -1,53 +1,64 @@
 # USB Relay Controller
 
-**USB Relay Controller** este o aplicație desktop simplă, construită în Python cu **PySide6 (Qt)**, pentru controlul rapid al mai multor module USB Relay. Interfața oferă o vedere clară asupra fiecărei plăci și a fiecărui releu, astfel încât pornirea sau oprirea circuitelor conectate să fie la un click distanță.
+**USB Relay Controller** este o aplicație desktop scrisă în Python cu **PySide6 (Qt)**, pentru controlul rapid al mai multor module USB Relay. Comunicarea cu hardware-ul se face direct prin biblioteca nativă **`USB_RELAY_DEVICE.dll`** (USB Relay Device Library v2), inclusă în directorul `lib/`.
 
 Fereastra are două file:
 
-- **Control relee** — alegi câte plăci folosești (1-4) și comanzi fiecare releu;
+- **Control relee** — scanează plăcile conectate, alegi câte folosești (1-4) și comanzi fiecare canal;
 - **Schimbă ID placă** — varianta grafică a utilitarului `change_usbrelay_id.py`.
 
 ## Ce face aplicația
 
-Aplicația controlează până la patru plăci de relee, identificate prin serialele `RLY01`, `RLY02`, `RLY03` și `RLY04`, fiecare având câte patru relee. Din lista **Plăci de relee folosite** alegi câte plăci sunt conectate (1, 2, 3 sau 4), iar interfața afișează doar plăcile selectate. Fiecare releu are propriul buton ON/OFF, iar starea lui este evidențiată vizual prin culoare:
+La pornire, aplicația scanează automat plăcile conectate și le afișează cu serialul real și numărul real de canale. Nimic nu este presupus: serialele și numărul de relee (1, 2, 4 sau 8 canale) vin din bibliotecă, iar starea butoanelor este citită din hardware după fiecare comandă.
+
+Din lista **Plăci de relee folosite** alegi câte plăci comanzi: 1, 2, 3 sau 4. Dacă ai selectat mai multe plăci decât sunt detectate, pozițiile rămase apar ca **neconectată**, iar bara de stare îți spune câte plăci s-au găsit.
+
+Fiecare releu are propriul buton ON/OFF, iar starea lui este evidențiată vizual prin culoare:
 
 - **ON** — buton verde, pentru releu activat;
 - **OFF** — buton gri, pentru releu dezactivat.
 
-Pentru operații rapide, aplicația include și două comenzi globale:
+Butoanele din bara de sus acoperă operațiile rapide:
 
-- **ALL ON** — pornește toate releele de pe plăcile active;
-- **ALL OFF** — oprește toate releele de pe plăcile active.
+- **Scanează plăci** — recitește lista de plăci conectate;
+- **Citește starea** — resincronizează interfața cu starea reală a releelor;
+- **ALL ON** / **ALL OFF** — pornesc sau opresc toate releele de pe plăcile active.
 
-Comenzile globale se aplică doar plăcilor selectate, așa că nu se trimit comenzi către plăci care nu sunt conectate.
+Comenzile globale se aplică doar plăcilor selectate, așa că nu se trimit comenzi către plăci pe care nu le folosești.
 
-## Optimizări incluse
+## Cum comunică cu hardware-ul
 
-- comenzile individuale sunt executate în fundal, pe `QThreadPool`, astfel încât interfața Qt nu se blochează în timpul comunicării cu `usbrelay.exe`;
-- comenzile globale rulează în paralel pentru toate releele configurate;
-- butoanele sunt dezactivate temporar cât timp comanda asociată este în execuție, pentru a preveni apăsările repetate accidentale;
-- starea din interfață este actualizată numai pentru comenzile executate cu succes;
-- erorile returnate de `usbrelay.exe` sunt afișate în interfață, atât în bara de stare, cât și într-un mesaj cu detalii.
+Fișierul `usb_relay_lib.py` este un binding `ctypes` peste biblioteca nativă și expune două niveluri:
+
+- `UsbRelayLibrary` — reflectă unu-la-unu funcțiile din `usb_relay_device.h` (`usb_relay_init`, `usb_relay_device_enumerate`, `usb_relay_device_open_with_serial_number`, comenzile pe canale, `usb_relay_device_get_status_bitmap`);
+- `RelayController` — ține deschise handle-urile plăcilor, traduce masca de biți în stări și oferă operații pe o placă sau pe mai multe.
+
+Două constrângeri din documentația bibliotecii sunt tratate explicit în cod:
+
+- **biblioteca nu este thread-safe** — toate apelurile trec printr-un singur thread de lucru (`RelayService`), iar rezultatele ajung în interfață prin semnale Qt, deci interfața nu se blochează;
+- **biblioteca nu detectează conectarea/deconectarea la cald** — de aceea există butonul **Scanează plăci**, iar lista se reîmprospătează doar la cerere.
+
+Codurile de retur documentate în header (`0` succes, `1` eroare, `2` index invalid) sunt transformate în mesaje clare, afișate în interfață.
 
 ## Schimbarea ID-ului din interfață
 
 Fila **Schimbă ID placă** oferă aceleași operații ca utilitarul din linia de comandă, dar cu mouse-ul:
 
-- butonul **Reîmprospătează lista** rulează `usbrelay.exe -list` și afișează plăcile detectate;
+- butonul **Reîmprospătează lista** enumeră plăcile și arată pentru fiecare ID-ul, numărul de canale și calea dispozitivului;
 - câmpul **ID nou** acceptă doar caractere alfanumerice ASCII și maximum 5 caractere, iar textul este transformat automat în majuscule;
-- butonul **Scrie ID pe placă** cere o confirmare, apoi trimite raportul HID către placă;
-- după scriere, aplicația îți amintește să deconectezi și să reconectezi placa, ca să poți verifica noul serial.
+- butonul **Scrie ID pe placă** cere o confirmare, apoi scrie noul serial;
+- după scriere, aplicația îți amintește să deconectezi și să reconectezi placa, iar fila de control cere o rescanare.
 
-Codul din spate este reutilizat din `change_usbrelay_id.py`, deci interfața și linia de comandă se comportă identic.
+Scrierea ID-ului se face prin pachetul `hid`, pentru că biblioteca nativă nu expune o funcție de setare a serialului. Înainte de scriere, aplicația eliberează handle-urile deschise de bibliotecă, ca placa să nu rămână ocupată.
 
 ## Utilitar în linia de comandă
 
-Fișierul `change_usbrelay_id.py` poate fi folosit și direct, din terminal. Scriptul:
+Fișierul `change_usbrelay_id.py` poate fi folosit și direct, din terminal:
 
-- listează plăcile detectate cu `usbrelay.exe -list`;
+- listează plăcile detectate prin aceeași bibliotecă nativă;
 - acceptă ID-uri ASCII alfanumerice de maximum 5 caractere;
 - construiește raportul HID într-o funcție separată, mai ușor de testat și întreținut;
-- expune `list_relays_output`, `validate_id` și `change_id`, funcțiile refolosite de interfața grafică;
+- expune `validate_id` și `change_id`, funcțiile refolosite de interfața grafică;
 - rulează doar când fișierul este executat direct, datorită blocului `if __name__ == "__main__"`.
 
 > Recomandare: conectează o singură placă atunci când schimbi ID-ul, apoi deconectează și reconectează placa înainte de verificare.
@@ -56,28 +67,43 @@ Fișierul `change_usbrelay_id.py` poate fi folosit și direct, din terminal. Scr
 
 Acest controller este potrivit pentru scenarii în care este nevoie de comutarea rapidă și organizată a mai multor ieșiri electrice: bancuri de testare, automatizări de laborator, prototipuri hardware, validări de echipamente sau control local pentru dispozitive conectate prin relee USB.
 
-Prin folosirea comenzilor în paralel atunci când se schimbă starea tuturor releelor, aplicația reduce timpul de reacție și oferă o experiență fluidă chiar și atunci când sunt controlate 16 relee simultan.
+Pentru că apelurile se fac direct în biblioteca nativă, nu prin pornirea unui proces extern pentru fiecare comandă, reacția este mai rapidă, iar erorile ajung direct în interfață.
 
 ## Funcționalități principale
 
 - interfață grafică intuitivă, bazată pe PySide6 (Qt);
+- detectarea automată a plăcilor conectate, cu serialul și numărul real de canale;
 - selectarea numărului de plăci folosite: 1, 2, 3 sau 4;
+- suport pentru plăci cu 1, 2, 4 sau 8 canale;
 - control individual pentru fiecare releu;
 - comenzi globale pentru activarea sau dezactivarea releelor de pe plăcile active;
+- citirea stării reale a releelor din hardware;
 - schimbarea ID-ului unei plăci direct din interfață;
-- afișarea stării curente direct pe butoane;
-- integrare cu executabilul `usbrelay.exe` pentru trimiterea comenzilor către hardware;
-- mesaje de eroare clare atunci când un releu nu poate fi controlat;
-- bară de stare cu ultima acțiune executată;
+- mesaje de eroare clare, plus bară de stare cu ultima acțiune executată;
 - utilitar separat, în linia de comandă, pentru schimbarea ID-ului plăcilor.
 
 ## Cerințe
 
-- Python 3;
-- pachetul Python `PySide6` pentru interfața grafică (`pip install PySide6`);
-- pachetul Python `hid` pentru schimbarea ID-ului (`pip install hid`);
-- `usbrelay.exe` accesibil din directorul aplicației sau din `PATH`;
-- module USB Relay configurate cu serialele definite în `relay_gui.py`.
+- Windows, cu `USB_RELAY_DEVICE.dll` din `lib/` (versiunea inclusă este pe **64 de biți**);
+- Python 3 pe **64 de biți**, ca să corespundă arhitecturii DLL-ului;
+- pachetul Python `PySide6` pentru interfața grafică;
+- pachetul Python `hid`, necesar doar pentru schimbarea ID-ului;
+- eventual pachetul VC++ redistributable, cerut de DLL.
+
+```bash
+pip install -r requirements.txt
+```
+
+## Structura proiectului
+
+| Fișier | Rol |
+| --- | --- |
+| `relay_gui.py` | interfața PySide6 și threadul de lucru |
+| `usb_relay_lib.py` | binding `ctypes` peste biblioteca nativă |
+| `change_usbrelay_id.py` | schimbarea ID-ului (interfață + linie de comandă) |
+| `lib/USB_RELAY_DEVICE.dll` | biblioteca nativă, 64 de biți |
+| `lib/usb_relay_device.h`, `lib/usb_relay_device.lib` | header și import library, pentru integrări C/C++ |
+| `lib/Readme_USBRelayDLL.md` | documentația originală a bibliotecii |
 
 ## Rulare interfață grafică
 
@@ -85,7 +111,7 @@ Prin folosirea comenzilor în paralel atunci când se schimbă starea tuturor re
 python relay_gui.py
 ```
 
-După pornire, se deschide fereastra **USB Relay Controller**. Alege mai întâi câte plăci folosești, apoi apasă pe butonul unui releu pentru a-i schimba starea sau folosește butoanele globale pentru control simultan.
+După pornire, aplicația scanează plăcile conectate. Alege câte plăci folosești, apoi apasă pe butonul unui releu pentru a-i schimba starea sau folosește butoanele globale pentru control simultan.
 
 ## Schimbarea ID-ului unei plăci din terminal
 
@@ -95,6 +121,13 @@ python change_usbrelay_id.py
 
 Urmează instrucțiunile afișate în terminal. Pentru ieșire, introdu `Q`, `QUIT` sau `EXIT`.
 
+## Depanare
+
+- **„Nu pot încărca biblioteca USB Relay"** — verifică dacă `USB_RELAY_DEVICE.dll` este în `lib/` și dacă arhitectura Python (32/64 de biți) se potrivește cu cea a DLL-ului. Mesajul de eroare afișat de aplicație spune exact unde a căutat.
+- **DLL într-o altă locație** — setează variabila de mediu `USB_RELAY_DLL` către calea bibliotecii; are prioritate față de căutarea automată.
+- **Placa nu apare în listă** — biblioteca nu detectează conectarea la cald, deci apasă **Scanează plăci** după ce ai conectat placa.
+- **Nu pot scrie ID-ul** — instalează pachetul `hid` și asigură-te că este conectată o singură placă.
+
 ## Personalizare
 
-Serialele plăcilor și numărul de relee per placă pot fi ajustate direct în `relay_gui.py`, prin modificarea constantelor `ALL_BOARDS` și `RELAYS_PER_BOARD`. Numărul de plăci oferit în listă se adaptează automat la lungimea lui `ALL_BOARDS`, iar `DEFAULT_BOARD_COUNT` stabilește câte plăci sunt selectate la pornire.
+Numărul maxim de plăci selectabile și numărul implicit sunt date de constantele `MAX_BOARD_COUNT` și `DEFAULT_BOARD_COUNT` din `relay_gui.py`. Numărul de canale nu se configurează: vine de la fiecare placă, prin `usb_relay_device_get_num_relays`.
